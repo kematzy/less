@@ -82,7 +82,7 @@ Gem::Specification.new do |s|
      "spec/less/extra_import_path/import/import-test-a.less",
      "spec/less/functions.less",
      "spec/less/hidden.less",
-     "spec/less/import-full-paths.less",
+     "spec/less/import-full-path.less",
      "spec/less/import-with-extra-paths.less",
      "spec/less/import.less",
      "spec/less/import/import-test-a.less",
