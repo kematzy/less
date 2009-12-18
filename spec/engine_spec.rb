@@ -16,7 +16,7 @@ end
 
 describe Less::Engine do
   include LessEngineSpecHelper
-
+  
   describe "to_css" do
     it "should parse css" do
       lessify(:css).should == css(:css)
@@ -101,9 +101,26 @@ describe Less::Engine do
     end
     
     it "should work with import" do
+      # create a temporary test file
+      tmp_test_file = "#{ENV['HOME']}/.less-test-import.less"
+      File.open(tmp_test_file,"w") do |f| 
+        import_file = "#{File.expand_path(File.dirname(__FILE__))}/less/import/import-test-b"
+        f.write("@import \"#{import_file}\";\n.imported-from-full-path { color:green; }") 
+      end
+      
       lessify(:import).should == css(:import)
+      
+      # clean up after ourselves
+      FileUtils.rm(tmp_test_file)
     end
     
+    it "should raise Less::ImportError when given HTTP imports" do
+      lambda {  
+        Less::Engine.new('@import url("http://lesscss.org/all.css");').to_css
+      }.should raise_error(Less::ImportError)
+    end
+    
+    it "should work with variables and mixins from imported files"
     it "should parse a big file"
     it "should handle complex color operations"
   end

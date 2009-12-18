@@ -4,6 +4,7 @@
   height: 10px;
   color: red;
 }
+.imported-from-full-path { color: green; }
 #import-test {
   height: 10px;
   color: red;

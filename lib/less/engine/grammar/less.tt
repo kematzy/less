@@ -125,7 +125,11 @@ module Less
     rule import
       ws "@import" S url:(string / url) medias? s ';' ws {
         def build env
-          path = File.join(env.root.file || Dir.pwd, url.value)
+          raise ImportError, "LessCSS does not accept HTTP imports [#{url.value}]" if url.value =~ /^http/
+          # accept the path to be full or literal, and make sure all paths are full
+          path = (url.value =~ /^(~\/|\/)/) ? 
+            File.expand_path(url.value) : 
+            File.expand_path(File.join(env.root.file, url.value)) || File.expand_path(File.join(Dir.pwd, url.value))
           path += '.less' unless path =~ /\.(le|c)ss$/
           if File.exist? path
             @@imported_files ||= []
