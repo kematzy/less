@@ -30,6 +30,10 @@ describe Less::Engine do
       lessify(:css_3).should == css(:css_3)
     end
     
+    it "should handle properties prefixed with a dash" do
+      lessify(:dash_prefix).should == css(:dash_prefix)
+    end
+    
     it "should parse comments" do
       lessify(:comments).should == css(:comments)
     end
@@ -118,6 +122,17 @@ describe Less::Engine do
       lambda {  
         Less::Engine.new('@import url("http://lesscss.org/all.css");').to_css
       }.should raise_error(Less::ImportError)
+    end
+
+    it "should work tih import using extra paths" do
+      lambda {
+        lessify(:import_with_extra_paths).should == css(:import_with_extra_paths)
+      }.should raise_error(Less::ImportError)
+      # finding a partial in another location
+      $LESS_LOAD_PATH = ["spec/less/extra_import_path"]
+      lessify(:import_with_extra_paths).should == css(:import_with_extra_paths)
+      # overriding a partial in another location so this takes priority over the same named partial in the same directory
+      lessify(:import).should == css(:import_with_partial_in_extra_path)
     end
     
     it "should work with variables and mixins from imported files"

@@ -1,10 +1,13 @@
+require 'grammar/common'
+require 'grammar/entity'
+
 module Less
   grammar StyleSheet
     include Common
     include Entity
-    
+
     rule primary
-      (import / declaration / mixin / ruleset / comment)* {
+      (import / declaration / ruleset / mixin / comment)* {
         def build env = Less::Element.new
           elements.map do |e|
             e.build env if e.respond_to? :build
@@ -30,46 +33,41 @@ module Less
           end
         end
         # Mixin Declaration
-      } / '@' name:[-a-zA-Z0-9_]+ s parameters ws "{" ws primary ws "}" ws {
+      } / ws '.' name:[-a-zA-Z0-9_]+ ws parameters ws "{" ws primary ws "}" ws {
         def build env
-          env << Node::Mixin.new(name.text_value, parameters.build(env))
+          env << Node::Mixin::Def.new(name.text_value, parameters.build(env))
           primary.build env.last
-          #env.last
         end
       }
     end
-    
+
     rule mixin
-      ws selectors ';' ws {
-        def build env        
+      name:('.' [-a-zA-Z0-9_]+) args:(arguments) s ';' ws {
+        def build env
+          definition = env.nearest(name.text_value, :mixin) or raise MixinNameError, "#{name.text_value}() in #{env}"
+          params = args.build.map {|i| Node::Expression.new i } unless args.empty?
+          env << Node::Mixin::Call.new(definition, params || [], env)
+        end
+    } / ws selectors ';' ws {
+        def build env
           selectors.build(env, :mixin).each do |path|
             rules = path.inject(env.root) do |current, node|
-              current.descend(node.selector, node) or raise MixinNameError, path.join
+              current.descend(node.selector, node) or raise MixinNameError, "#{selectors.text_value} in #{env}"
             end.rules
             env.rules += rules
-            #env.mix(rules)
           end
-        end
-      } / name:('@' [-a-zA-Z0-9_]+) args:(arguments?) s ';' {
-        def build env
-          mix = env.nearest(name.text_value, :mixin) or raise MixinNameError, name.text_value                        
-          params = args.build.map {|i| Node::Expression.new i } unless args.empty?
-
-          env.mix ((params.nil? || params.empty?) ?
-              mix.rules + mix.params : 
-              mix.pass(params, env))
         end
       }
     end
-    
+
     rule selectors
       ws selector tail:(s ',' ws selector)* ws {
-        def build env, method 
+        def build env, method
           all.map do |e|
             e.send(method, env) if e.respond_to? method
           end.compact
         end
-    
+
         def all
           [selector] + tail.elements.map {|e| e.selector }
         end
@@ -87,7 +85,7 @@ module Less
             node.last
           end
         end
-    
+
         def mixin env
           sel.elements.map do |e|
             Node::Element.new(e.element.text_value, e.select.text_value)
@@ -95,7 +93,7 @@ module Less
         end
       }
     end
-    
+
     rule parameters
       '(' s ')' {
         def build env
@@ -107,7 +105,7 @@ module Less
             e.build(env)
           end
         end
-        
+
         def all
           [parameter] + tail.elements.map {|e| e.parameter }
         end
@@ -121,26 +119,31 @@ module Less
         end
       }
     end
-    
+
     rule import
       ws "@import" S url:(string / url) medias? s ';' ws {
         def build env
-          raise ImportError, "LessCSS does not accept HTTP imports [#{url.value}]" if url.value =~ /^http/
-          # accept the path to be full or literal, and make sure all paths are full
-          path = (url.value =~ /^(~\/|\/)/) ? 
-            File.expand_path(url.value) : 
-            File.expand_path(File.join(env.root.file, url.value)) || File.expand_path(File.join(Dir.pwd, url.value))
-          path += '.less' unless path =~ /\.(le|c)ss$/
-          if File.exist? path
-            @@imported_files ||= []
-            unless @@imported_files.include?(path)
-              @@imported_files << path
-              imported = Less::Engine.new(File.new(path)).to_tree
-              env.rules += imported.rules
+          standard_path = File.join(env.root.file || Dir.pwd, url.value)
+
+          # Compile a list of possible paths for this file
+          paths = $LESS_LOAD_PATH.map { |p| File.join(p, url.value) } + [standard_path]
+          # Standardize and make uniq
+          paths = paths.map do |p|
+            p = File.expand_path(p)
+            p += '.less' unless p =~ /\.(le|c)ss$/
+            p
+          end.uniq
+
+          # Use the first that exists if any
+          if path = paths.detect {|p| File.exists?(p)}
+            unless env.root.imported.include?(path)
+              env.root.imported << path
+              env.rules += Less::Engine.new(File.new(path)).to_tree.rules
             end
           else
-            raise ImportError, path
+            raise ImportError, standard_path
           end
+
         end
       }
     end
@@ -150,7 +153,7 @@ module Less
         def build env = nil
           Node::Function.new('url', value)
         end
-    
+
         def value
           Node::Quoted.new CGI.unescape(path.text_value)
         end
@@ -166,10 +169,10 @@ module Less
     # height: 100%;
     #
     rule declaration
-      ws name:(ident / variable) s ':' s expressions tail:(ws ',' ws expressions)* s (';'/ ws &'}') ws {
+      ws name:(ident / variable) s ':' ws expressions tail:(ws ',' ws expressions)* s (';'/ ws &'}') ws {
         def build env
           result = all.map {|e| e.build(env) if e.respond_to? :build }.compact
-          env << (name.text_value =~ /^@/ ? 
+          env << (name.text_value =~ /^@/ ?
             Node::Variable : Node::Property).new(name.text_value, result, env)
         end
 
@@ -186,7 +189,7 @@ module Less
     rule expressions
       # Operation
       expression tail:(operator expression)+ {
-        def build env = nil          
+        def build env = nil
           all.map {|e| e.build(env) }.dissolve
         end
 
@@ -198,12 +201,12 @@ module Less
         def build env = nil
           all.map {|e| e.build(env) if e.respond_to? :build }.compact
         end
-        
+
         def all
           [expression] + tail.elements.map {|f| f.expression } + [i]
         end
       # Catch-all rule
-      } / [-a-zA-Z0-9_%*/.&=:,#+? \[\]()]+ {
+      } / [-a-zA-Z0-9_.&*/=:,+? \[\]()#%]+ {
         def build env
           [Node::Anonymous.new(text_value)]
         end
@@ -222,7 +225,7 @@ module Less
         end
       }
     end
-    
+
     # !important
     rule important
       s '!' s 'important' {
@@ -251,11 +254,15 @@ module Less
     # div / .class / #id / input[type="text"] / lang(fr)
     #
     rule element
-      (class_id / tag / ident) attribute* ('(' (selector / number) ')')? / attribute+ / '@media' / '@font-face'
+      ((class / id / tag / ident) attribute* ('(' ([a-zA-Z]+ / pseudo_exp / selector / [0-9]+) ')')?)+
+      / attribute+ / '@media' / '@font-face'
     end
 
-    rule class_id
-      tag? (class / id)+
+    #
+    # 4n+1
+    #
+    rule pseudo_exp
+      '-'? ([0-9]+)? 'n' ([-+] [0-9]+)?
     end
 
     #
@@ -283,7 +290,7 @@ module Less
 
     # TODO: Merge this with attribute rule
     rule accessor
-      ident:(class_id / tag) '[' attr:(string / variable) ']' {
+      ident:(class / id / tag) '[' attr:(string / variable) ']' {
         def build env
           env.nearest(ident.text_value)[attr.text_value.delete(%q["'])].evaluate
         end
@@ -301,7 +308,7 @@ module Less
         end
       }
     end
-    
+
     #
     # Functions and arguments
     #
@@ -320,7 +327,7 @@ module Less
             e.build if e.respond_to? :build
           end.compact
         end
-  
+
         def all
           [expressions] + tail.elements.map {|e| e.expressions }
         end

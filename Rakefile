@@ -8,85 +8,45 @@ begin
     s.homepage    = "http://www.lesscss.org"
     s.description = "LESS is leaner CSS"
     s.rubyforge_project = 'less'
-    s.add_dependency('treetop', '>= 1.3.0')
-    s.add_dependency('mutter', '>= 0.3.3')
+    s.add_dependency('treetop', '>= 1.4.2')
+    s.add_dependency('mutter', '>= 0.4.2')
   end
+  Jeweler::GemcutterTasks.new
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"
 end
 
-# rubyforge
-begin
-  require 'rake/contrib/sshpublisher'
-  namespace :rubyforge do
-    desc "Release gem and RDoc documentation to RubyForge"
-    task :release => ["rubyforge:release:gem", "rubyforge:release:docs"]
+require 'spec/rake/spectask'
 
-    namespace :release do
-      desc "Publish RDoc to RubyForge."
-      task :docs => [:rdoc] do
-        config = YAML.load(
-            File.read(File.expand_path('~/.rubyforge/user-config.yml'))
-        )
-        options << '--line-numbers' << '--inline-source'
-        host = "#{config['username']}@rubyforge.org"
-        remote_dir = "/var/www/gforge-projects/the-perfect-gem/"
-        local_dir = 'rdoc'
-
-        Rake::SshDirPublisher.new(host, remote_dir, local_dir).upload
-      end
-    end
-  end
-rescue LoadError
-  puts "Rake SshDirPublisher is unavailable or your rubyforge environment is not configured."
+Spec::Rake::SpecTask.new("spec") do |t|
+  t.libs << 'lib' << 'spec'
+  t.spec_files = FileList['spec/**/*_spec.rb']
+  t.spec_opts = ['--color', '--format=specdoc']
 end
 
-begin
-  require 'spec/rake/spectask'
-
-  Spec::Rake::SpecTask.new("spec") do |t|
-    t.spec_files = FileList['spec/**/*_spec.rb']
-    t.spec_opts = ['--color', '--format=specdoc']
-  end
-
-  task :test do
-    Rake::Task['spec'].invoke
-  end
-
-  Spec::Rake::SpecTask.new("rcov_spec") do |t|
-    t.spec_files = FileList['spec/**/*_spec.rb']
-    t.spec_opts = ['--color']
-    t.rcov = true
-    t.rcov_opts = ['--exclude', '^spec,/gems/']
-  end
+task :test do
+  Rake::Task['spec'].invoke
 end
 
 begin
   require 'lib/less'
   require 'benchmark'
-  
+
   task :compile do
     abort "compiling isn't necessary anymore."
     puts "compiling #{LESS_GRAMMAR.split('/').last}..."
     File.open(LESS_PARSER, 'w') {|f| f.write Treetop::Compiler::GrammarCompiler.new.ruby_source(LESS_GRAMMAR) }
   end
-  
+
   task :benchmark do
-    #require 'profile'
-    puts "benchmarking... "
-    less, tree = File.read("spec/less/big.less"), nil
-    
-    parse = Benchmark.measure do
-      tree = Less::Engine.new(less).parse(false)
-    end.total.round(2)
-    
-    build = Benchmark.measure do
-      tree.build(Less::Node::Element.new)
-    end.total.round(2)
-    
-    puts "parse: #{parse}s\nbuild: #{build}s"
-    puts "------------"
-    puts "total: #{parse + build}s"
+    less = File.read("spec/less/big.less")
+    result = nil
+    Benchmark.bmbm do |b|
+      b.report("parse:  ") { result = Less::Engine.new(less).parse(false) }
+      b.report("build:  ") { result = result.build(Less::Node::Element.new) }
+      b.report("compile:") { result.to_css }
+    end
   end
 end
 
+task :default => :spec

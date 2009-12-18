@@ -37,6 +37,7 @@ module Less
 
           # File has changed
           if File.stat( @source ).mtime > File.stat( @destination ).mtime
+            print Time.now.strftime("%H:%M:%S -- ") if @options[:timestamps]
             print "Change detected... "
 
             # Loop until error is fixed
@@ -60,20 +61,24 @@ module Less
         File.open( @destination, "w" ) do |file|
           file.write css
         end
-        print "#{o('* ' + (new ? 'Created'  : 'Updated'), :green)} " + 
-              "#{@destination.split('/').last}\n: " if watch?
+
+        act, file = (new ? 'Created' : 'Updated'), @destination.split('/').last
+        print "#{o("* #{act}", :green)} #{file}\n: " if watch?
+        Growl.notify "#{act} #{file}", :title => 'LESS' if @options[:growl] && @options[:verbose]
       rescue Errno::ENOENT => e
         abort "#{e}"
       rescue SyntaxError => e
         err "#{e}\n", "Syntax"
+      rescue CompileError => e
+        err "#{e}\n", "Compile"
       rescue MixedUnitsError => e
         err "`#{e}` you're  mixing units together! What do you expect?\n", "Mixed Units"
       rescue PathError => e
         err "`#{e}` was not found.\n", "Path"
       rescue VariableNameError => e
-        err "#{o(e, :yellow)} is undefined.\n", "Name"
+        err "#{o(e, :yellow)} is undefined.\n", "Variable Name"
       rescue MixinNameError => e
-        err "#{o(e, :yellow)} is undefined.\n", "Name"
+        err "#{o(e, :yellow)} is undefined.\n", "Mixin Name"
       else
         true
       end
@@ -95,11 +100,11 @@ module Less
         false
       end
     end
-    
-    private
-    
-    def o str, *styles
-      @mutter.process(str, *(@options[:color] ? styles : []))
+
+  private
+
+    def o ex, *styles
+      @mutter.process(ex.to_s, *(@options[:color] ? styles : []))
     end
   end
 end

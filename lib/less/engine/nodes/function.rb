@@ -54,7 +54,7 @@ module Less
     
       def initialize name, args
         @args = if args.is_a? Array
-          Value.new(args, self)
+          args.map {|e| e.is_a?(Expression) ? e : Expression.new(e, self)}
         else
           [args]
         end
@@ -62,8 +62,12 @@ module Less
         super name
       end
       
-      def to_css
-        self.evaluate.to_css
+      def to_css env = nil
+        self.evaluate(env).to_css
+      end
+      
+      def nearest node
+        parent.nearest node
       end
       
       #
@@ -76,7 +80,12 @@ module Less
         if Functions.available.include? self.to_sym
           send to_sym, *@args
         else
-          Node::Anonymous.new("#{to_sym}(#{@args.map(&:to_css) * ', '})")
+          args = @args.map { |e|
+            e.parent = self.parent
+            e = e.evaluate(context) if e.respond_to?(:evaluate)
+            e.to_css
+          }  * ', '
+          Node::Anonymous.new("#{to_sym}(#{args})")
         end
       end
     end
