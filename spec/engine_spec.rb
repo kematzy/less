@@ -105,26 +105,30 @@ describe Less::Engine do
     end
     
     it "should work with import" do
+      lessify(:import).should == css(:import)
+    end
+
+    it "should import full paths" do
       # create a temporary test file
       tmp_test_file = "#{ENV['HOME']}/.less-test-import.less"
       File.open(tmp_test_file,"w") do |f| 
-        import_file = "#{File.expand_path(File.dirname(__FILE__))}/less/import/import-test-b"
-        f.write("@import \"#{import_file}\";\n.imported-from-full-path { color:green; }") 
+        import_file = "#{File.expand_path(File.dirname(__FILE__))}/less/colors"
+        f.write(".imported-from-full-path { color:green; }\n@import \"#{import_file}\";") 
       end
       
-      lessify(:import).should == css(:import)
+      lessify(:import_full_path).should == css(:import_full_path)
       
       # clean up after ourselves
       FileUtils.rm(tmp_test_file)
     end
-    
+
     it "should raise Less::ImportError when given HTTP imports" do
       lambda {  
         Less::Engine.new('@import url("http://lesscss.org/all.css");').to_css
       }.should raise_error(Less::ImportError)
     end
 
-    it "should work tih import using extra paths" do
+    it "should work with import using extra paths" do
       lambda {
         lessify(:import_with_extra_paths).should == css(:import_with_extra_paths)
       }.should raise_error(Less::ImportError)

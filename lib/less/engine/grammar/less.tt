@@ -123,10 +123,13 @@ module Less
     rule import
       ws "@import" S url:(string / url) medias? s ';' ws {
         def build env
-          standard_path = File.join(env.root.file || Dir.pwd, url.value)
+          # Accept full, ~/ or relative paths
+          standard_path = (url.value =~ /^(~\/|\/)/) ? 
+            File.expand_path(url.value) : File.join((env.root.file || Dir.pwd), url.value)
 
           # Compile a list of possible paths for this file
           paths = $LESS_LOAD_PATH.map { |p| File.join(p, url.value) } + [standard_path]
+
           # Standardize and make uniq
           paths = paths.map do |p|
             p = File.expand_path(p)

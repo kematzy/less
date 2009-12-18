@@ -1,0 +1,27 @@
+#css { color: yellow; }
+#import { color: red; }
+.mixin {
+  height: 10px;
+  color: red;
+}
+.imported-from-full-path { color: green; }
+#yelow #short { color: #ffeeaa; }
+#yelow #long { color: #ffeeaa; }
+#yelow #rgba { color: rgba(255, 238, 170, 0.1); }
+#blue #short { color: #0000ff; }
+#blue #long { color: #0000ff; }
+#blue #rgba { color: rgba(0, 0, 255, 0.1); }
+#overflow .a { color: #000000; }
+#overflow .b { color: #ffffff; }
+#overflow .c { color: #ffffff; }
+#overflow .d { color: #00ff00; }
+#grey {
+  color: #c8c8c8;
+  background-color: #323232;
+}
+#import-test {
+  height: 10px;
+  color: red;
+  width: 10px;
+  height: 30%;
+}
